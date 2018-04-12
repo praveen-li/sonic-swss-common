@@ -12,6 +12,9 @@
 
 namespace swss {
 
+#define SWSS_LOG_EMERG(MSG, ...)       swss::Logger::getInstance().write(swss::Logger::SWSS_EMERG,  ":- %s: " MSG, __FUNCTION__, ##__VA_ARGS__)
+#define SWSS_LOG_ALERT(MSG, ...)       swss::Logger::getInstance().write(swss::Logger::SWSS_ALERT,  ":- %s: " MSG, __FUNCTION__, ##__VA_ARGS__)
+#define SWSS_LOG_CRIT(MSG, ...)        swss::Logger::getInstance().write(swss::Logger::SWSS_CRIT,   ":- %s: " MSG, __FUNCTION__, ##__VA_ARGS__)
 #define SWSS_LOG_ERROR(MSG, ...)       swss::Logger::getInstance().write(swss::Logger::SWSS_ERROR,  ":- %s: " MSG, __FUNCTION__, ##__VA_ARGS__)
 #define SWSS_LOG_WARN(MSG, ...)        swss::Logger::getInstance().write(swss::Logger::SWSS_WARN,   ":- %s: " MSG, __FUNCTION__, ##__VA_ARGS__)
 #define SWSS_LOG_NOTICE(MSG, ...)      swss::Logger::getInstance().write(swss::Logger::SWSS_NOTICE, ":- %s: " MSG, __FUNCTION__, ##__VA_ARGS__)
