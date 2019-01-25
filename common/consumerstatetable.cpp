@@ -31,6 +31,16 @@ ConsumerStateTable::ConsumerStateTable(DBConnector *db, const std::string &table
 
     RedisReply r(dequeueReply());
     setQueueLength(r.getReply<long long int>());
+
+    /* Publish multiple messages from 1..KEY[2]
+    *  KEY[2] is supposed to be >= 1
+    */
+    std::string luaMultiPublish =
+        "for i = 1, KEYS[2] do\n"
+        "    redis.call('PUBLISH', KEYS[1], ARGV[1])\n"
+        "end\n";
+    m_multiPublish = loadRedisScript(m_db, luaMultiPublish);
+
 }
 
 void ConsumerStateTable::pops(std::deque<KeyOpFieldsValuesTuple> &vkco, const std::string& /*prefix*/)
@@ -90,6 +100,42 @@ void ConsumerStateTable::pops(std::deque<KeyOpFieldsValuesTuple> &vkco, const st
             kfvOp(kco) = SET_COMMAND;
         }
     }
+}
+
+void ConsumerStateTable::pop(KeyOpFieldsValuesTuple &kco, const std::string prefix)
+{
+    /* If buffer is empty, pops first */
+    if (m_buffer.empty())
+    {
+        pops(m_buffer, prefix);
+
+	/* still emtry, return */
+        if (m_buffer.empty())
+        {
+            kfvFieldsValues(kco).clear();
+            kfvKey(kco).clear();
+            kfvOp(kco).clear();
+            return;
+        }
+
+	/* if buffer size is > 1, we need publish messages per key */
+        if (m_buffer.size() > 1)
+        {
+            RedisCommand command;
+            command.format(
+                "EVALSHA %s 2 %s %d %s ",
+                m_multiPublish.c_str(),
+                getChannelName().c_str(),
+                m_buffer.size() - 1,
+                "G");
+            RedisReply r(m_db, command);
+        }
+    }
+
+    /* pop the first one */
+    kco = m_buffer.front();
+
+    m_buffer.pop_front();
 }
 
 }

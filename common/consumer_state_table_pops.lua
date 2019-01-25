@@ -2,7 +2,13 @@ redis.replicate_commands()
 local ret = {}
 local tablename = KEYS[2]
 local stateprefix = ARGV[2]
-local keys = redis.call('SPOP', KEYS[1], ARGV[1])
+-- skip the batch size for now, pop everything in keyset
+-- in case notification is redudent (keyset empty), skip
+local keyset_num = redis.call('SCARD', KEYS[1])
+if( keyset_num == 0 ) then
+    return ret
+end
+local keys = redis.call('SPOP', KEYS[1], tostring(keyset_num))
 local n = table.getn(keys)
 for i = 1, n do
    local key = keys[i]

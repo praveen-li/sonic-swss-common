@@ -15,8 +15,11 @@ public:
     /* Get multiple pop elements */
     void pops(std::deque<KeyOpFieldsValuesTuple> &vkco, const std::string &prefix = EMPTY_PREFIX);
 
+    /* pop one element */
+    void pop(KeyOpFieldsValuesTuple &kco, const std::string prefix = EMPTY_PREFIX);
+
 private:
     std::string m_shaPop;
+    std::string m_multiPublish;
 };
-
 }
