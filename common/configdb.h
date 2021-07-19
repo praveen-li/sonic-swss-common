@@ -148,6 +148,9 @@ protected:
             self.serialize_key = self._serialize_key
             self.deserialize_key = self._deserialize_key
 
+            # filter below tables, when config is fetched using ConfigDBConnector.get_config()
+	    self.filter_table = ['LOCK']
+
             ## Note: callback is difficult to implement by SWIG C++, so keep in python
             self.handlers = {}
 
@@ -197,6 +200,8 @@ protected:
             data = super(ConfigDBConnector, self).get_config()
             ret = {}
             for table_name, table in data.items():
+                if table_name in self.filter_table:
+                    continue
                 for row, entry in table.items():
                     entry = self.raw_to_typed(entry)
                     ret.setdefault(table_name, {})[self.deserialize_key(row)] = entry
