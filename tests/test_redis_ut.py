@@ -55,6 +55,7 @@ def test_Table():
 
 def test_SubscriberStateTable():
     db = swsscommon.DBConnector("APPL_DB", 0, True)
+    db.flushdb()
     t = swsscommon.Table(db, "testsst")
     sel = swsscommon.Select()
     cst = swsscommon.SubscriberStateTable(db, "testsst")
@@ -63,6 +64,41 @@ def test_SubscriberStateTable():
     t.set("aaa", fvs)
     (state, c) = sel.select()
     assert state == swsscommon.Select.OBJECT
+    (key, op, cfvs) = cst.pop()
+    assert key == "aaa"
+    assert op == "SET"
+    assert len(cfvs) == 1
+    assert cfvs[0] == ('a', 'b')
+
+def thread_test_func():
+    print("Start thread: thread_test_func")
+    time.sleep(2)
+    db = swsscommon.DBConnector("APPL_DB", 0, True)
+    t = swsscommon.Table(db, "testsst")
+    fvs = swsscommon.FieldValuePairs([('a','b')])
+    t.set("aaa", fvs)
+    print("Leave thread: thread_test_func")
+
+def test_SelectYield():
+    db = swsscommon.DBConnector("APPL_DB", 0, True)
+    db.flushdb()
+    sel = swsscommon.Select()
+    cst = swsscommon.SubscriberStateTable(db, "testsst")
+    sel.addSelectable(cst)
+
+    print("Spawning thread: thread_test_func")
+    test_thread = Thread(target=thread_test_func)
+    test_thread.start()
+
+    while True:
+        # timeout 10s is too long and indicates thread hanging
+        (state, c) = sel.select(10000)
+        if state == swsscommon.Select.OBJECT:
+            break
+        elif state == swsscommon.Select.TIMEOUT:
+            assert False
+
+    test_thread.join()
     (key, op, cfvs) = cst.pop()
     assert key == "aaa"
     assert op == "SET"
@@ -261,6 +297,25 @@ def test_ConfigDBConnector():
 
     config_db.delete_table("TEST_PORT")
     allconfig =  config_db.get_config()
+    assert len(allconfig) == 0
+
+def test_ConfigDBConnectorSeparator():
+    db = swsscommon.DBConnector("APPL_DB", 0, True)
+    config_db = ConfigDBConnector()
+    config_db.db_connect("APPL_DB", False, False)
+    config_db.get_redis_client(config_db.APPL_DB).flushdb()
+    config_db.set_entry("TEST_PORT", "Ethernet222", {"alias": "etp2x"})
+    db.set("ItemWithoutSeparator", "item11")
+    allconfig = config_db.get_config()
+    assert "TEST_PORT" in allconfig
+    assert "ItemWithoutSeparator" not in allconfig
+
+    alltable = config_db.get_table("*")
+    assert "Ethernet222" in alltable
+
+    config_db.delete_table("TEST_PORT")
+    db.delete("ItemWithoutSeparator")
+    allconfig = config_db.get_config()
     assert len(allconfig) == 0
 
 def test_ConfigDBPipeConnector():
