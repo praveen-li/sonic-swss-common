@@ -149,7 +149,7 @@ protected:
             self.deserialize_key = self._deserialize_key
 
             # filter below tables, when config is fetched using ConfigDBConnector.get_config()
-	    self.filter_table = ['LOCK']
+            self.filter_table = ['LOCK']
 
             ## Note: callback is difficult to implement by SWIG C++, so keep in python
             self.handlers = {}
