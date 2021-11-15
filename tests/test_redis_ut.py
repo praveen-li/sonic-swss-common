@@ -1,9 +1,10 @@
+import os
 import time
 import pytest
 from threading import Thread
 from pympler.tracker import SummaryTracker
 from swsscommon import swsscommon
-from swsscommon.swsscommon import ConfigDBPipeConnector, DBInterface, SonicV2Connector, SonicDBConfig, ConfigDBConnector
+from swsscommon.swsscommon import ConfigDBPipeConnector, DBInterface, SonicV2Connector, SonicDBConfig, ConfigDBConnector, SonicDBConfig
 import json
 
 existing_file = "./tests/redis_multi_db_ut_config/database_config.json"
@@ -172,6 +173,15 @@ def test_SelectMemoryLeak():
     assert not cases
 
 
+def thread_coming_data():
+    print("Start thread: thread_coming_data")
+    db = SonicV2Connector(use_unix_socket_path=True)
+    db.connect("TEST_DB")
+    time.sleep(DBInterface.PUB_SUB_NOTIFICATION_TIMEOUT * 2)
+    db.set("TEST_DB", "key0_coming", "field1", "value2")
+    print("Leave thread: thread_coming_data")
+
+
 def test_DBInterface():
     dbintf = DBInterface()
     dbintf.set_redis_kwargs("", "127.0.0.1", 6379)
@@ -181,6 +191,8 @@ def test_DBInterface():
     assert db.TEST_DB == 'TEST_DB'
     assert db.namespace == ''
     db.connect("TEST_DB")
+    redisclient = db.get_redis_client("TEST_DB")
+    redisclient.flushdb()
     db.set("TEST_DB", "key0", "field1", "value2")
     fvs = db.get_all("TEST_DB", "key0")
     assert "field1" in fvs
@@ -191,10 +203,20 @@ def test_DBInterface():
         assert False, 'Unexpected exception raised in json dumps'
 
     # Test keys
-    ks = db.keys("TEST_DB", "key*");
+    ks = db.keys("TEST_DB", "key*")
     assert len(ks) == 1
-    ks = db.keys("TEST_DB", u"key*");
+    ks = db.keys("TEST_DB", u"key*")
     assert len(ks) == 1
+
+    # Test keys could be sorted in place
+    db.set("TEST_DB", "key11", "field1", "value2")
+    db.set("TEST_DB", "key12", "field1", "value2")
+    db.set("TEST_DB", "key13", "field1", "value2")
+    ks = db.keys("TEST_DB", "key*")
+    ks0 = ks
+    ks.sort(reverse=True)
+    assert ks == sorted(ks0, reverse=True)
+    assert isinstance(ks, list)
 
     # Test del
     db.set("TEST_DB", "key3", "field4", "value5")
@@ -204,7 +226,6 @@ def test_DBInterface():
     assert deleted == 0
 
     # Test pubsub
-    redisclient = db.get_redis_client("TEST_DB")
     pubsub = redisclient.pubsub()
     dbid = db.get_dbid("TEST_DB")
     pubsub.psubscribe("__keyspace@{}__:pub_key*".format(dbid))
@@ -254,12 +275,34 @@ def test_DBInterface():
     with pytest.raises(TypeError):
         fvs.update(fvs, fvs)
 
-    # Test blocking
+    # Test blocking reading existing data in Redis
     fvs = db.get_all("TEST_DB", "key0", blocking=True)
     assert "field1" in fvs
     assert fvs["field1"] == "value2"
     assert fvs.get("field1", "default") == "value2"
     assert fvs.get("nonfield", "default") == "default"
+
+    # Test blocking reading coming data in Redis
+    thread = Thread(target=thread_coming_data)
+    thread.start()
+    fvs = db.get_all("TEST_DB", "key0_coming", blocking=True)
+    assert "field1" in fvs
+    assert fvs["field1"] == "value2"
+    assert fvs.get("field1", "default") == "value2"
+    assert fvs.get("nonfield", "default") == "default"
+
+    # Test hmset
+    fvs = {"field1": "value3", "field2": "value4"}
+    db.hmset("TEST_DB", "key5", fvs)
+    attrs = db.get_all("TEST_DB", "key5")
+    assert len(attrs) == 2
+    assert attrs["field1"] == "value3"
+    assert attrs["field2"] == "value4"
+    fvs = {"field5": "value5"}
+    db.hmset("TEST_DB", "key5", fvs)
+    attrs = db.get_all("TEST_DB", "key5")
+    assert len(attrs) == 3
+    assert attrs["field5"] == "value5"
 
     # Test empty/none namespace
     db = SonicV2Connector(use_unix_socket_path=True, namespace=None)
@@ -284,7 +327,11 @@ def test_DBInterface():
 
 def test_ConfigDBConnector():
     config_db = ConfigDBConnector()
+    assert config_db.db_name == ""
+    assert config_db.TABLE_NAME_SEPARATOR == "|"
     config_db.connect(wait_for_init=False)
+    assert config_db.db_name == "CONFIG_DB"
+    assert config_db.TABLE_NAME_SEPARATOR == "|"
     config_db.get_redis_client(config_db.CONFIG_DB).flushdb()
     config_db.set_entry("TEST_PORT", "Ethernet111", {"alias": "etp1x"})
     allconfig = config_db.get_config()
@@ -391,3 +438,68 @@ def test_ConfigDBConnect():
     client.flushdb()
     allconfig = config_db.get_config()
     assert len(allconfig) == 0
+
+def test_multidb_ConfigDBConnector():
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    global_db_config = os.path.join(test_dir, 'redis_multi_db_ut_config', 'database_global.json')
+    SonicDBConfig.load_sonic_global_db_config(global_db_config)
+    config_db = ConfigDBConnector(use_unix_socket_path=True, namespace='asic1')
+    assert config_db.namespace == 'asic1'
+
+
+def test_ConfigDBSubscribe():
+    table_name = 'TEST_TABLE'
+    test_key = 'key1'
+    test_data = {'field1': 'value1'}
+    global output_data 
+    global stop_listen_thread
+    output_data =  ""
+    stop_listen_thread = False
+
+    def test_handler(key, data):
+        global output_data
+        assert key == test_key
+        assert data == test_data
+        output_data = test_data['field1']
+
+    # the config_db.listen() is a blocking function so could not use that in the tests
+    # this function has similar logic with a way to exit  the listen function
+    def listen_thread_func(config_db):
+        global stop_listen_thread
+        pubsub = config_db.get_redis_client(config_db.db_name).pubsub()
+        pubsub.psubscribe(
+            "__keyspace@{}__:*".format(config_db.get_dbid(config_db.db_name)))
+        time.sleep(2)
+        while True:
+            if stop_listen_thread:
+                break
+            item = pubsub.listen_message()
+            if 'type' in item and item['type'] == 'pmessage':
+                key = item['channel'].split(':', 1)[1]
+                try:
+                    (table, row) = key.split(config_db.TABLE_NAME_SEPARATOR, 1)
+                    if table in config_db.handlers:
+                        client = config_db.get_redis_client(config_db.db_name)
+                        data = config_db.raw_to_typed(client.hgetall(key))
+                        config_db._ConfigDBConnector__fire(table, row, data)
+                except ValueError:
+                    pass  # Ignore non table-formated redis entries
+
+    config_db = ConfigDBConnector()
+    config_db.connect(wait_for_init=False)
+    client = config_db.get_redis_client(config_db.CONFIG_DB)
+    client.flushdb()
+    config_db.subscribe(table_name, lambda table, key,
+                        data: test_handler(key, data))
+    assert table_name in config_db.handlers
+
+    thread = Thread(target=listen_thread_func, args=(config_db,))
+    thread.start()
+    time.sleep(5)
+    config_db.set_entry(table_name, test_key, test_data)
+    stop_listen_thread = True
+    thread.join()
+    assert output_data == test_data['field1']
+
+    config_db.unsubscribe(table_name)
+    assert table_name not in config_db.handlers

@@ -130,6 +130,11 @@ int64_t DBInterface::publish(const std::string& dbName, const std::string& chann
     return m_redisClient.at(dbName).publish(channel, message);
 }
 
+void DBInterface::hmset(const std::string& dbName, const std::string &hash, const std::map<std::string, std::string> &values)
+{
+    m_redisClient.at(dbName).hmset(hash, values.begin(), values.end());
+}
+
 int64_t DBInterface::set(const std::string& dbName, const std::string& hash, const std::string& key, const std::string& value, bool blocking)
 {
     auto innerfunc = [&]
@@ -242,6 +247,7 @@ bool DBInterface::_unavailable_data_handler(const std::string& dbName, const cha
         auto& channel = keyspace_notification_channels.at(dbName);
         auto ctx = channel->getContext();
         redisReply *reply;
+        ctx->err = REDIS_OK; // Stop later redisGetReply early return on no data after first redisReply timeout
         int rc = redisGetReply(ctx, reinterpret_cast<void**>(&reply));
         if (rc == REDIS_ERR && ctx->err == REDIS_ERR_IO && errno == EAGAIN)
         {
@@ -288,7 +294,7 @@ void DBInterface::_subscribe_keyspace_notification(const std::string& dbName)
     pubsub->psubscribe(KEYSPACE_PATTERN);
 
     // Set the timeout of the pubsub channel, so future redisGetReply will be impacted
-    struct timeval tv = { 0, (suseconds_t)(1000 * PUB_SUB_NOTIFICATION_TIMEOUT) };
+    struct timeval tv = { PUB_SUB_NOTIFICATION_TIMEOUT, 0 };
     int rc = redisSetTimeout(pubsub->getContext(), tv);
     if (rc != REDIS_OK)
     {

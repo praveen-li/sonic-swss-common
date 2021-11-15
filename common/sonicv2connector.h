@@ -41,6 +41,8 @@ public:
 
     std::map<std::string, std::string> get_all(const std::string& db_name, const std::string& _hash, bool blocking=false);
 
+    void hmset(const std::string& db_name, const std::string &key, const std::map<std::string, std::string> &values);
+
     int64_t set(const std::string& db_name, const std::string& _hash, const std::string& key, const std::string& val, bool blocking=false);
 
     int64_t del(const std::string& db_name, const std::string& key, bool blocking=false);
@@ -89,6 +91,9 @@ private:
 
         def get_all(self, db_name, _hash, blocking=False):
             return dict(super(SonicV2Connector, self).get_all(db_name, _hash, blocking))
+
+        def keys(self, *args, **kwargs):
+            return list(super(SonicV2Connector, self).keys(*args, **kwargs))
 %}
 #endif
 }
