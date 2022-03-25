@@ -54,6 +54,7 @@ ProducerStateTable::ProducerStateTable(RedisPipeline *pipeline, const string &ta
     string luaDel =
         "local keyset_num = redis.call('SCARD', KEYS[2])\n"
         "redis.call('SADD', KEYS[2], ARGV[2])\n"
+        "redis.call('SADD', KEYS[4], ARGV[2])\n"
         "redis.call('DEL', KEYS[3])\n"
         "if( keyset_num % 128 == 0 ) then \n"
         "    redis.call('PUBLISH', KEYS[1], ARGV[1])\n"
