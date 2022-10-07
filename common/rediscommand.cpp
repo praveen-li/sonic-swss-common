@@ -75,6 +75,12 @@ void RedisCommand::formatHDEL(const std::string& key, const std::string& field)
     return format("HDEL %s %s", key.c_str(), field.c_str());
 }
 
+/* Format EXPIRE key field command */
+void RedisCommand::formatEXPIRE(const std::string& key, const int64_t& ttl)
+{
+    return format("EXPIRE %s %lld", key.c_str(), ttl);
+}
+
 /* Format HDEL key multiple fields command */
 void RedisCommand::formatHDEL(const std::string& key, const std::vector<std::string>& fields)
 {

@@ -48,6 +48,9 @@ public:
     /* Format HDEL key multiple fields command */
     void formatHDEL(const std::string& key, const std::vector<std::string>& fields);
 
+    /* Format EXPIRE key ttl command */
+    void formatEXPIRE(const std::string& key, const int64_t& ttl);
+
     const char *c_str() const;
 
     size_t length() const;

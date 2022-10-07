@@ -138,6 +138,26 @@ void Table::set(const string &key, const vector<FieldValueTuple> &values,
     }
 }
 
+void Table::set(const string &key, const vector<FieldValueTuple> &values, const int64_t &ttl)
+{
+    if (values.size() == 0)
+        return;
+
+    RedisCommand cmd;
+    
+    cmd.formatHMSET(getKeyName(key), values.begin(), values.end());
+    m_pipe->push(cmd, REDIS_REPLY_INTEGER);
+    
+    // Configure the expire time for the entry that was just added
+    cmd.formatEXPIRE(getKeyName(key), ttl);
+    m_pipe->push(cmd, REDIS_REPLY_INTEGER);
+
+    if (!m_buffered)
+    {
+        m_pipe->flush();
+    }
+}
+
 void Table::del(const string &key, const string& /* op */, const string& /*prefix*/)
 {
     RedisCommand del_key;
