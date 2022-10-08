@@ -51,6 +51,9 @@ public:
     /* Format EXPIRE key ttl command */
     void formatEXPIRE(const std::string& key, const int64_t& ttl);
 
+    /* Format TTL key command */
+    void formatTTL(const std::string& key);
+
     const char *c_str() const;
 
     size_t length() const;

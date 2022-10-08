@@ -184,6 +184,8 @@ public:
 
     void getKeys(std::vector<std::string> &keys);
 
+    bool ttl(const string &key, int64_t &reply_value);
+
     void setBuffered(bool buffered);
 
     void flush();

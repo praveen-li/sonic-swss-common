@@ -158,6 +158,24 @@ void Table::set(const string &key, const vector<FieldValueTuple> &values, const 
     }
 }
 
+bool Table::ttl(const string &key, int64_t &reply_value)
+{
+    RedisCommand cmd_ttl;
+    cmd_ttl.formatTTL(getKeyName(key));
+    RedisReply r = m_pipe->push(cmd_ttl);
+    redisReply *reply = r.getContext();
+
+    if (reply != NULL)
+    {
+        reply_value = reply->integer;
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
 void Table::del(const string &key, const string& /* op */, const string& /*prefix*/)
 {
     RedisCommand del_key;
