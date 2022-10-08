@@ -158,7 +158,15 @@ void Table::set(const string &key, const vector<FieldValueTuple> &values, const 
     }
 }
 
-bool Table::ttl(const string &key, int64_t &reply_value)
+void Table::setTtl(const string &key, int64_t &ttl)
+{
+    RedisCommand cmd_ttl;
+    // Configure the expire time for the entry that was just added
+    cmd_ttl.formatEXPIRE(getKeyName(key), ttl);
+    m_pipe->push(cmd_ttl, REDIS_REPLY_INTEGER);
+}
+
+bool Table::getTtl(const string &key, int64_t &reply_value)
 {
     RedisCommand cmd_ttl;
     cmd_ttl.formatTTL(getKeyName(key));
